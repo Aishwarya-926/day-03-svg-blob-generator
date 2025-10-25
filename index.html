@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Day 3: SVG Blob Generator</title>
+    <title>Day 3: Animated SVG Blob Generator</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=JetBrains+Mono&display.swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <!-- We will inject our dynamic animation styles here -->
+    <style id="animation-styles"></style>
 </head>
 <body>
     <header>
-        <h1>SVG Blob Generator</h1>
+        <h1>Animated SVG Blob Generator</h1>
     </header>
 
     <main class="app-layout">
@@ -17,27 +19,42 @@
             <div id="svg-container">
                 <!-- Our generated SVG will go here -->
             </div>
-            <button id="regenerate-btn">Regenerate</button>
+            <button id="regenerate-btn">Regenerate Shape</button>
         </div>
 
         <div class="controls-wrapper">
             <div class="controls-panel">
-                <h2>Customize</h2>
+                <h2>Customize Shape</h2>
                 <div class="control-group">
-                    <label for="complexity">Complexity (Number of points)</label>
+                    <label for="complexity">Complexity (Points)</label>
                     <input type="range" id="complexity" min="3" max="15" value="6">
                     <span id="complexity-value">6</span>
                 </div>
                 <div class="control-group">
-                    <label for="contrast">Contrast (Jaggedness)</label>
+                    <label for="contrast">Contrast (Variation)</label>
                     <input type="range" id="contrast" min="0" max="50" value="20">
                     <span id="contrast-value">20</span>
                 </div>
+                
+                <hr class="divider">
+
+                <h2>Animate</h2>
+                <div class="control-group">
+                    <label for="animate-toggle" class="toggle-label">Preview Animation</label>
+                    <label class="switch">
+                        <input type="checkbox" id="animate-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
             </div>
             <div class="output-panel">
-                <h2>SVG Code</h2>
-                <textarea id="svg-output" rows="6" readonly></textarea>
-                <button id="copy-btn">Copy to Clipboard</button>
+                <h2>Export</h2>
+                <p class="export-description">Get a single, self-contained SVG file with the animation built-in.</p>
+                <button id="save-btn">Save Animated SVG</button>
+                <hr class="divider">
+                <h2>Static SVG Code</h2>
+                <textarea id="svg-output" rows="5" readonly></textarea>
+                <button id="copy-btn">Copy Static Code</button>
             </div>
         </div>
     </main>
