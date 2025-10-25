@@ -12,29 +12,39 @@ const svgOutput = document.getElementById('svg-output');
 
 /**
  * Converts polar coordinates (angle, radius) to Cartesian coordinates (x, y).
- * This is the core of how we place points around a center.
- * @param {number} angle - The angle in degrees.
- * @param {number} radius - The distance from the center.
- * @returns {{x: number, y: number}} The Cartesian coordinates.
  */
 function polarToCartesian(angle, radius) {
-    const angleInRadians = (angle - 90) * Math.PI / 180; // Convert degrees to radians and offset by -90 degrees
-    const x = 100 + (radius * Math.cos(angleInRadians)); // 100 is the center of our 200x200 SVG
+    const angleInRadians = (angle - 90) * Math.PI / 180;
+    const x = 100 + (radius * Math.cos(angleInRadians));
     const y = 100 + (radius * Math.sin(angleInRadians));
     return { x, y };
 }
 
 /**
- * Describes the SVG path command for a cubic Bezier curve.
- * @param {object} p1 - Start point {x, y}.
- * @param {object} p2 - End point {x, y}.
- * @param {object} controlPoint1 - First control point {x, y}.
- * @param {object} controlPoint2 - Second control point {x, y}.
- * @returns {string} The SVG path command string.
+ * Calculates the control points for a Catmull-Rom spline segment, which can be
+ * converted to a cubic Bezier curve. This is the key to creating smooth, convex curves.
+ * @param {object} p0 - Point before the start of the curve.
+ *   {p1} - Start point of the curve.
+ * @param {object} p2 - End point of the curve.
+ *   {p3} - Point after the end of the curve.
+ * @returns {object} An object containing the two control points.
  */
-function cubicBezierCommand(p1, p2, controlPoint1, controlPoint2) {
-    return `C ${controlPoint1.x},${controlPoint1.y} ${controlPoint2.x},${controlPoint2.y} ${p2.x},${p2.y}`;
+function catmullRomToBezier(p0, p1, p2, p3) {
+    // The 'tension' parameter. 1/6 is a good default for a smooth curve.
+    const tension = 1 / 6;
+
+    const controlPoint1 = {
+        x: p1.x + (p2.x - p0.x) * tension,
+        y: p1.y + (p2.y - p0.y) * tension
+    };
+    const controlPoint2 = {
+        x: p2.x - (p3.x - p1.x) * tension,
+        y: p2.y - (p3.y - p1.y) * tension
+    };
+
+    return { controlPoint1, controlPoint2 };
 }
+
 
 // --- Core Blob Generation Logic ---
 
@@ -48,26 +58,30 @@ function generateBlob() {
     const points = [];
     const angleStep = 360 / complexity;
 
-    // 1. Generate distorted points
+    // 1. Generate distorted points (same as before)
     for (let i = 0; i < complexity; i++) {
         const angle = angleStep * i;
         // The base radius is 80. We add a random value between -contrast and +contrast.
-        const randomRadius = 80 + (Math.random() - 0.5) * contrast; 
+        const randomRadius = 80 - contrast + Math.random() * contrast * 2;
         points.push(polarToCartesian(angle, randomRadius));
     }
 
-    // 2. Build the SVG path string with smooth curves
+    // 2. Build the SVG path string using the new, smarter curve calculation
     let path = `M ${points[0].x},${points[0].y}`;
+
     for (let i = 0; i < complexity; i++) {
+        // We need 4 points to define the curve between point i and point i+1.
+        // The modulo operator (%) is crucial for wrapping around the array.
+        const p0 = points[(i - 1 + complexity) % complexity];
         const p1 = points[i];
-        const p2 = points[(i + 1) % complexity]; // The next point, looping back to the start
+        const p2 = points[(i + 1) % complexity];
+        const p3 = points[(i + 2) % complexity];
 
-        // This is a simple way to create control points for a smooth curve.
-        // We essentially place them along the line connecting the points.
-        const controlPoint1 = polarToCartesian(angleStep * (i + 0.25), 80);
-        const controlPoint2 = polarToCartesian(angleStep * (i + 0.75), 80);
+        // Calculate the control points using our new function
+        const { controlPoint1, controlPoint2 } = catmullRomToBezier(p0, p1, p2, p3);
 
-        path += ` ${cubicBezierCommand(p1, p2, controlPoint1, controlPoint2)}`;
+        // Append the cubic Bezier curve command to the path
+        path += ` C ${controlPoint1.x},${controlPoint1.y} ${controlPoint2.x},${controlPoint2.y} ${p2.x},${p2.y}`;
     }
     path += ' Z'; // Close the path
 
@@ -82,9 +96,11 @@ function generateBlob() {
 
 function copyToClipboard() {
     svgOutput.select();
-    document.execCommand('copy');
-    copyBtn.textContent = 'Copied!';
-    setTimeout(() => { copyBtn.textContent = 'Copy to Clipboard'; }, 2000);
+    // Using navigator.clipboard for modern, secure copying
+    navigator.clipboard.writeText(svgOutput.value).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy to Clipboard'; }, 2000);
+    }).catch(err => console.error('Failed to copy: ', err));
 }
 
 // --- Event Listeners ---
@@ -92,7 +108,6 @@ complexitySlider.addEventListener('input', generateBlob);
 contrastSlider.addEventListener('input', generateBlob);
 regenerateBtn.addEventListener('click', generateBlob);
 copyBtn.addEventListener('click', copyToClipboard);
-
 
 // --- Initial Call ---
 document.addEventListener('DOMContentLoaded', generateBlob);
