@@ -16,11 +16,20 @@ let animationPaths = []; // Will store the 'd' attribute for each animation fram
 
 // --- Core Blob Generation Logic ---
 
-function polarToCartesian(angle, radius) { /* ... (no changes) ... */ }
-function catmullRomToBezier(p0, p1, p2, p3) { /* ... (no changes) ... */ }
+function polarToCartesian(angle, radius) {
+    const angleInRadians = (angle - 90) * Math.PI / 180;
+    const x = 100 + (radius * Math.cos(angleInRadians));
+    const y = 100 + (radius * Math.sin(angleInRadians));
+    return { x, y };
+}
 
-// --- REFACTORED: This function is now a "pure" function ---
-// It only calculates and returns a path string, without touching the DOM.
+function catmullRomToBezier(p0, p1, p2, p3) {
+    const tension = 1 / 6;
+    const controlPoint1 = { x: p1.x + (p2.x - p0.x) * tension, y: p1.y + (p2.y - p0.y) * tension };
+    const controlPoint2 = { x: p2.x - (p3.x - p1.x) * tension, y: p2.y - (p3.y - p1.y) * tension };
+    return { controlPoint1, controlPoint2 };
+}
+
 function createBlobPath(complexity, contrast) {
     const points = [];
     const angleStep = 360 / complexity;
@@ -31,54 +40,56 @@ function createBlobPath(complexity, contrast) {
         points.push(polarToCartesian(angle, randomRadius));
     }
 
-    let path = `M ${points[0].x},${points[0].y}`;
+    let path = `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
     for (let i = 0; i < complexity; i++) {
         const p0 = points[(i - 1 + complexity) % complexity];
         const p1 = points[i];
         const p2 = points[(i + 1) % complexity];
         const p3 = points[(i + 2) % complexity];
         const { controlPoint1, controlPoint2 } = catmullRomToBezier(p0, p1, p2, p3);
-        path += ` C ${controlPoint1.x},${controlPoint1.y} ${controlPoint2.x},${controlPoint2.y} ${p2.x},${p2.y}`;
+        path += ` C ${controlPoint1.x.toFixed(2)},${controlPoint1.y.toFixed(2)} ${controlPoint2.x.toFixed(2)},${controlPoint2.y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
     }
     path += ' Z';
     return path;
 }
 
-// --- NEW: Generates all frames for the animation ---
-function generateAnimationFrames() {
+// --- Main Application Logic ---
+
+function generateAndRender() {
     const complexity = parseInt(complexitySlider.value, 10);
     const contrast = parseInt(contrastSlider.value, 10);
     
     complexityValue.textContent = complexity;
     contrastValue.textContent = contrast;
     
-    animationPaths = []; // Reset the frames
+    animationPaths = [];
     const numFrames = 20;
     for (let i = 0; i < numFrames; i++) {
         animationPaths.push(createBlobPath(complexity, contrast));
     }
     
-    // Update the preview with the first frame
     renderPreview(animationPaths[0]);
-    // Update the dynamic stylesheet for the animation preview
     updateAnimationKeyframes();
 }
 
-// --- NEW: Renders the SVG in the preview panel ---
+// --- FIX #1: renderPreview now checks the toggle state ---
 function renderPreview(pathData) {
     const svgString = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><path d="${pathData}" fill="#3498db"></path></svg>`;
     svgContainer.innerHTML = svgString;
-    svgOutput.value = svgContainer.innerHTML; // Update static code output
+    svgOutput.value = svgContainer.innerHTML;
+    
+    // After rendering, immediately check if animation should be active and apply it.
+    if (animateToggle.checked) {
+        toggleAnimation(true);
+    }
 }
 
-// --- NEW: Injects CSS Keyframes into the document head ---
 function updateAnimationKeyframes() {
     let keyframes = "@keyframes morph {\n";
-    const step = 100 / (animationPaths.length - 1);
+    const step = 100 / (animationPaths.length); // Use length, not length-1 for smoother distribution
     
     animationPaths.forEach((path, index) => {
-        // We include the first frame again at the end for a smooth loop
-        const percentage = index === animationPaths.length ? 100 : Math.round(step * index);
+        const percentage = Math.round(step * index);
         keyframes += `  ${percentage}% { d: "${path}"; }\n`;
     });
     // Add the first frame at the end to complete the loop smoothly
@@ -88,7 +99,6 @@ function updateAnimationKeyframes() {
     animationStyles.innerHTML = keyframes;
 }
 
-// --- NEW: Toggles the animation class on the SVG path ---
 function toggleAnimation(shouldAnimate) {
     const pathElement = svgContainer.querySelector('path');
     if (pathElement) {
@@ -100,16 +110,22 @@ function toggleAnimation(shouldAnimate) {
     }
 }
 
-// --- NEW: Creates the content for the downloadable animated SVG file ---
+// --- FIX #2: createAnimatedSVGFile now includes keyTimes ---
 function createAnimatedSVGFile() {
     const values = animationPaths.join('; ') + `; ${animationPaths[0]}`;
+    
+    // Generate the keyTimes attribute
+    const numFrames = animationPaths.length;
+    const keyTimes = Array.from({ length: numFrames + 1 }, (_, i) => (i / numFrames).toFixed(2)).join('; ');
+
     const svgFileContent = `
 <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <path fill="#3498db" d="${animationPaths[0]}">
     <animate 
       attributeName="d" 
       dur="4s" 
-      repeatCount="indefinite" 
+      repeatCount="indefinite"
+      keyTimes="${keyTimes}"
       values="${values}">
     </animate>
   </path>
@@ -131,34 +147,6 @@ function handleSaveAnimation() {
     URL.revokeObjectURL(url);
 }
 
-function copyToClipboard() { /* ... (no changes) ... */ }
-
-// --- Event Listeners ---
-complexitySlider.addEventListener('input', generateAnimationFrames);
-contrastSlider.addEventListener('input', generateAnimationFrames);
-regenerateBtn.addEventListener('click', generateAnimationFrames);
-copyBtn.addEventListener('click', copyToClipboard);
-saveBtn.addEventListener('click', handleSaveAnimation);
-animateToggle.addEventListener('change', (e) => toggleAnimation(e.target.checked));
-
-// --- Initial Call ---
-document.addEventListener('DOMContentLoaded', generateAnimationFrames);
-
-// Helper function stubs (paste the full functions from the previous day)
-function polarToCartesian(angle, radius) {
-    const angleInRadians = (angle - 90) * Math.PI / 180;
-    const x = 100 + (radius * Math.cos(angleInRadians));
-    const y = 100 + (radius * Math.sin(angleInRadians));
-    return { x, y };
-}
-
-function catmullRomToBezier(p0, p1, p2, p3) {
-    const tension = 1 / 6;
-    const controlPoint1 = { x: p1.x + (p2.x - p0.x) * tension, y: p1.y + (p2.y - p0.y) * tension };
-    const controlPoint2 = { x: p2.x - (p3.x - p1.x) * tension, y: p2.y - (p3.y - p1.y) * tension };
-    return { controlPoint1, controlPoint2 };
-}
-
 function copyToClipboard() {
     svgOutput.select();
     navigator.clipboard.writeText(svgOutput.value).then(() => {
@@ -166,3 +154,14 @@ function copyToClipboard() {
         setTimeout(() => { copyBtn.textContent = 'Copy Static Code'; }, 2000);
     }).catch(err => console.error('Failed to copy: ', err));
 }
+
+// --- Event Listeners ---
+complexitySlider.addEventListener('input', generateAndRender);
+contrastSlider.addEventListener('input', generateAndRender);
+regenerateBtn.addEventListener('click', generateAndRender);
+copyBtn.addEventListener('click', copyToClipboard);
+saveBtn.addEventListener('click', handleSaveAnimation);
+animateToggle.addEventListener('change', (e) => toggleAnimation(e.target.checked));
+
+// --- Initial Call ---
+document.addEventListener('DOMContentLoaded', generateAndRender);
